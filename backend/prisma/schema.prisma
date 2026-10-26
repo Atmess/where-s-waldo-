@@ -1,0 +1,84 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+
+// 1. Characters to find with percentage bounding boxes
+model Target {
+  id        String       @id @default(uuid())
+  name      String       @unique // e.g. "waldo", "wizard", "wenda", "odlaw", "woof"
+  imageName String       // e.g. "urban-maze.jpg"
+  
+  // Percentage coordinate boundaries (0.00 to 100.00 %)
+  minX      Float
+  maxX      Float
+  minY      Float
+  maxY      Float
+
+  hits      SessionHit[]
+  createdAt DateTime     @default(now())
+}
+
+// 2. Active or finished game rounds
+model GameSession {
+  id            String       @id @default(uuid())
+  userId        String?      // 👈 Note the '?' — allows NULL for guest players
+  user          User?        @relation(fields: [userId], references: [id])
+  startTime     DateTime     @default(now())
+  endTime       DateTime?
+  timeInSeconds Int?
+  completed     Boolean      @default(false)
+
+  hits          SessionHit[]
+  createdAt     DateTime     @default(now())
+}
+
+// 3. Tracks found characters per session (explicit junction table)
+model SessionHit {
+  id        String      @id @default(uuid())
+  sessionId String
+  targetId  String
+  createdAt DateTime    @default(now())
+
+  session   GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  target    Target      @relation(fields: [targetId], references: [id], onDelete: Cascade)
+
+  // Ensures a character cannot be found more than once in the same game round
+  @@unique([sessionId, targetId])
+}
+
+// 4. Global high score board
+model Leaderboard {
+  id            String   @id @default(uuid())
+  userId        String?  // 👈 Optional: links score to a registered user
+  user          User?    @relation(fields: [userId], references: [id])
+  name          String   @default("Anonymous")
+  timeInSeconds Int
+  createdAt     DateTime @default(now())
+}
+
+//5. User 
+model User {
+  id          String        @id @default(uuid())
+  name        String        @unique // Good to keep usernames unique if logged in
+  email       String?       @unique // Optional: if using password auth
+  password    String?       // Optional: if storing hashed passwords
+  bestTime    Int?          // Stores fastest completion time in seconds (null if no game won yet)
+  totalPlay   Int           @default(0) // Tracks total games played
+  
+  // Opposite relation field so Prisma knows User links to GameSession
+  sessions    GameSession[] 
+  score       Leaderboard[]
+
+  createdAt   DateTime      @default(now())
+}
